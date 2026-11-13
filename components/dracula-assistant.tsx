@@ -11,7 +11,7 @@ export function DraculaAssistant() {
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
   })
 
@@ -32,10 +32,13 @@ export function DraculaAssistant() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" })
   }, [messages, open])
 
+  // After an error the chat stays usable, so the customer can simply ask again.
+  const busy = status === "submitted" || status === "streaming"
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const text = input.trim()
-    if (!text || status !== "ready") return
+    if (!text || busy) return
     sendMessage({ text })
     setInput("")
   }
@@ -97,6 +100,18 @@ export function DraculaAssistant() {
               )
             })}
 
+            {error && !busy && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-muted p-3 text-sm text-foreground">
+                  Sorry, I couldn&apos;t answer just now 🧛‍♂️. Try again, or call / WhatsApp us on{" "}
+                  <a href="https://wa.me/233554068969" target="_blank" rel="noopener noreferrer" className="font-semibold underline">
+                    0554068969
+                  </a>
+                  .
+                </div>
+              </div>
+            )}
+
             {status === "submitted" && (
               <div className="flex justify-start">
                 <div className="flex gap-1 rounded-2xl rounded-tl-sm bg-muted p-3">
@@ -117,7 +132,7 @@ export function DraculaAssistant() {
             />
             <button
               type="submit"
-              disabled={status !== "ready" || !input.trim()}
+              disabled={busy || !input.trim()}
               aria-label="Send message"
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white transition-opacity disabled:opacity-40"
               style={{ backgroundColor: "var(--brand)" }}

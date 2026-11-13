@@ -1,6 +1,14 @@
+import { google } from "@ai-sdk/google"
 import { convertToModelMessages, streamText, type UIMessage } from "ai"
 
 export const maxDuration = 30
+
+// Google Gemini, with the free API key from aistudio.google.com in the Vercel environment variable
+// GOOGLE_GENERATIVE_AI_API_KEY. "gemini-flash-latest" always points to Google's newest fast model;
+// set GEMINI_MODEL in Vercel to use a different one.
+const MODEL = process.env.GEMINI_MODEL || "gemini-flash-latest"
+const SORRY =
+  "Sorry, I can't answer right now 🧛‍♂️. Please call or WhatsApp us on 0554068969 and we will help you straight away."
 
 const SYSTEM_PROMPT = `You are Dracula, the friendly, funny, tech-expert vampire mascot and support assistant for "Efaristo Fix Tech Lab", a phone and laptop repair shop in Ghana.
 
@@ -20,7 +28,7 @@ ABOUT THE BUSINESS (answer questions using ONLY this info):
   - Board Repair (micro-soldering, IC replacement, motherboard diagnosis) — From GH₵ 200
 - Prices are starting prices; final price depends on device and fault.
 - Contacts:
-  - Business Line: 0554068968 — call (+233554068968) or WhatsApp (https://wa.me/233554068968)
+  - Business Line: 0554068969 — call (+233554068969) or WhatsApp (https://wa.me/233554068969)
   - Personal WhatsApp: 0546149938 (https://wa.me/233546149938)
   - Email: cashiousofori123@gmail.com
 
@@ -33,10 +41,25 @@ export async function POST(req: Request) {
   const { messages }: { messages: UIMessage[] } = await req.json()
 
   const result = streamText({
-    model: "openai/gpt-4.1-mini",
+    model: google(MODEL),
     system: SYSTEM_PROMPT,
-    messages: await convertToModelMessages(messages),
+    // Only the latest part of the conversation, and only text, so one visitor cannot use up the free quota.
+    messages: await convertToModelMessages(
+      (Array.isArray(messages) ? messages : []).slice(-12).map((m) => ({
+        ...m,
+        parts: (m.parts || [])
+          .filter((p) => p.type === "text")
+          .map((p) => ({ type: "text" as const, text: String((p as { text?: string }).text || "").slice(0, 1500) })),
+      })),
+    ),
+    maxOutputTokens: 500,
   })
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse({
+    onError: (error) => {
+      // The real reason shows in Vercel -> the project -> Logs; the customer sees a friendly message.
+      console.error("Dracula could not answer:", error)
+      return SORRY
+    },
+  })
 }
